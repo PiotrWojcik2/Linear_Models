@@ -1,0 +1,233 @@
+---
+title: "Raport 2"
+author: "Piotr Wojcik"
+date: "11/2/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<p>W poniższych zadaniach będziemy pracować na zbiorze danych zawierającym relację między ilością kserokopiarek i czasem(w godzinach) jaki potrzeba na ich konserwację.</p>
+```{r including_data, echo = TRUE, warning = FALSE, tidy = TRUE}
+data <- read.table("CH01PR20.txt", col.names = c("time","quantity"))
+```
+<h2>Zadanie 1</h2>
+<p>Analizę powyższych danych zaczniemy od wyznaczenia ich na wykresie, gdzie pionowa oś będzie czasem(w godzinach) konserwacji, natomiast pozioma, ilością kserokopiarek.</p>
+```{r plot_data1, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(data$quantity, data$time, main = NULL, ylab = "czas(h)", xlab = "ilość(szt)", col = "#16ab43", pch = 19)
+```
+<p>Patrząc na wykres można zauważyć, że dane w przybliżeniu układają się w pewną prostą, którą będziemy w kolejnym zadaniu wyznaczać.</p>
+
+<h2>Zadanie 2</h2>
+<p>W poniższym zadaniu będziemy szukać prostej, która będzie dobrze przybliżać analizowaną relację. Znaczy to, że chcemy wyznaczyć punkty $\small \beta_0, \beta_1$, takie że:</p>
+$$
+Y_i = \beta_1X_i + \beta_0 + \xi_i,
+$$
+<p>gdzie $\small (X_i,Y_i)$ to elementy naszej relacji, natomiast $\xi_i$ to zmienna losowa o rozkładzie normalnym $\small N(0,\sigma^2)$, gdzie dla każdego $\small i \neq j$ mamy $\small cov(\xi_i, \xi_j) = 0$.<p>
+<p>W rzeczywistości nie będziemy szukać dokładnych wartości naszych parametrów, tylko przybliżać je poniższymi estymatorami:</p>
+$$
+\hat{\beta_1} = \frac{\sum_{i = 1}^n{(X_i-\overline{X})(Y_i-\overline{Y})}}{\sum_{i = 1}^n{(X_i-\overline{X})^2}} \\
+\hat{\beta_0} = \overline{Y} - \hat{\beta_1} \overline{X} \\
+\hat{\sigma}^2 = \frac{1}{n-2}\sum_{i=1}^n{(Y_i - \hat{\beta_0} - \beta_1X_i)^2}
+$$
+```{r estimators_ex2, echo = TRUE, warning = FALSE, tidy = TRUE}
+B1_estimator <- function(x, y) {
+  return(sum((x-mean(x))*(y-mean(y)))/sum((x-mean(x))^2))
+}
+B0_estimator <- function(x, y) {
+  return(mean(y) - B1_estimator(x,y)*mean(x))
+}
+sigma2_estimator <- function(x,y) {
+  return(1/(length(x)-2)*sum((y - B0_estimator(x,y) - B1_estimator(x,y)*x)^2))
+}
+
+beta1 <- B1_estimator(data$quantity, data$time)
+beta0 <- B0_estimator(data$quantity, data$time)
+sigma <- sqrt(sigma2_estimator(data$quantity, data$time))
+```
+<p>Podstawiając nasze dane do powyższych estymatorów otrzymujemy współczynniki do prostej postaci:</p>
+$$
+y = \beta_1 x + \beta_0 = `r round(beta1,3)`x `r round(beta0, 3)`.
+$$
+<p>Teraz wyznaczymy 95% przedział ufności dla parametu $\small \beta_1$ postaci:
+$$
+\left[ \hat{\beta_1} - t_c s(\hat{\beta_1}) , \hat{\beta_1} + t_c s(\hat{\beta_1})  \right],
+$$
+<p>gdzie $\small t_c$, to kwantyl rzędu $\small 1 - \frac{0.05}{2}$ dla rozkładu studenta z $\small n - 2$ stopniami swobody, gdzie $\small n$ to ilość obserwacji, natomiast $\small s^2(\hat{\beta_1})$ wynosi:</p>
+$$
+s^2(\hat{\beta_1}) = \frac{\hat{\sigma}^2}{\sum_{i = 1}^n{(X_i-\overline{X})^2}}.
+$$
+```{r conf_int_data, echo = TRUE, warning = FALSE, tidy = TRUE}
+s2_beta1_function <- function(x, s) {
+  return(s^2/(sum((x-mean(x))^2)))
+}
+s_beta1 <- sqrt(s2_beta1_function(data$quantity, sigma))
+tc <- qt(1-0.05/2, df = length(data$quantity) - 2)
+```
+<p>Podstawiając wszystkie dane otrzymujemy przedział ufności postaci:</p>
+$$
+\left[ `r round(beta1-tc*s_beta1 ,3)` , `r round(beta1+tc*s_beta1 ,3)` \right].
+$$
+<p>Zajmiemy się teraz ustaleniem istotności parametru $\small \beta_1$, to znaczy, wykonamy test studenta dla parametru $\small \beta_1$ z hipotezą zerową $\small H_0: \beta_1 = 0$ i hipotezą alternatywną $\small H_A: \beta_1 \neq 0$.</p>
+<p>Statystyka testowa wynosi:</p>
+$$
+T = \frac{\hat{\beta_1}}{s(\beta_1)} = `r round(beta1/s_beta1 ,3)`.
+$$
+<p>Teraz, jeżeli $\small |T| > t_c$, gdzie $\small t_c$ jest takie jak ostatnio, to odrzucimy hipotezę zerową, przez co wykażemy istotny związek między zminennymi $\small X$ i $\small Y$ w naszym modelu.</p>
+<p>Istotnie, $\small |T| = `r abs(round(beta1/s_beta1 ,3))` > `r round(tc,3)` = t_c$, stąd odrzucamy hipotezę zerową $\small H_0: \beta_1 = 0$. Dla lepszego wglądu wyznaczymy <em>p-wartość</em> równą $\small p = P(|t| > |T|) = `r 2*pt(beta1/s_beta1,43, lower.tail = FALSE)`$. Ponieważ jest ona bardzo bliska zera, stąd wniosek, że mamy nawet większą pewność(niż na poziomie 95%), że hipoteza zerowa nie zachodzi. Takie wyniki można zinterpretować również w taki sposób, że uzależnienie czasu potrzebnego do konserwacji kserokopiarek od ich ilości, jest bardzo słuszne.</p>
+
+<h2>Zadanie 3</h2>
+<p>W poniższym zadaniu, wyznaczymy 95% przedział ufności dla średniego czasu konserwacji, jeżeli wiemy, że mamy do dyspozycji $\small 11$ kserokopiarek.</p>
+<p>Zadanie zaczniemy od wyznaczenia średniego czasu konserwacji dla jedenastu kserokopiarek. Jest on postaci:</p>
+$$
+\hat{\mu_{11}} = \hat{\beta_0} + \hat{\beta_1}X_{11}.
+$$
+<p>Dostajemy stąd, że $\small \mu_{11} = `r round(beta0 + beta1*11 ,3)`$. Co zdaje się zgadzać z wykresem naszej relacji:</p>
+```{r plot_with_pred_point, echo = TRUE, warning = FALSE, tidy = TRUE}
+mu_11 <- beta0 + beta1*11
+colors = c(sapply(1:45, function(x)"#16ab43"),"#f110dd")
+plot(c(data$quantity, 11), c(data$time, mu_11), main = NULL, ylab = "czas(h)", xlab = "ilość(szt)", col = colors, pch = 19, xlim = c(0,12))
+lines(seq(0,20,by=10), beta0 + beta1*seq(0,20,by=10), col = "#2e3f91", lwd = 2)
+```
+<p>Mając już $\small \hat{\mu_{11}}$, możemy wyznaczyć nasz przedział ufności, który jest postaci:</p>
+$$
+\left[ \hat{\mu_{11}} - t_c s(\hat{\mu_{11}}), \hat{\mu_{11}} + t_c s(\hat{\mu_{11}}) \right],
+$$
+<p>gdzie $\small t_c$ wynosi tyle co dotychczas, natomiast $\small s(\hat{\mu_{11}})$ wynosi:</p>
+$$
+s^2(\hat{\mu_{11}}) = \hat{\sigma}^2\left( \frac{1}{n} + \frac{(X_{11} - \overline{X})^2}{\sum_{i = 1}^n{(X_i-\overline{X})^2}} \right).
+$$
+```{r ex3data, echo = TRUE, warning = FALSE, tidy = TRUE}
+s2_mu <- function(v, x, s) {
+  return(s^2*(1/length(x) + (v-mean(x))^2/(sum((x-mean(x))^2))))
+}
+s_mu_11 <- sqrt(s2_mu(11, data$quantity, sigma))
+```
+<p>Po obliczeniu wszystkich potrzebnych danych, możemy wyznaczyć nasz 95% przedział ufności dla średniego czasu jaki oczekujemy przy jedenastu kserokopiarkach:</p>
+$$
+[`r round(mu_11 - tc*s_mu_11, 3)`, `r round(mu_11 + tc*s_mu_11, 3)`].
+$$
+<p>Jak widać, jest on całkiem szeroki, co sugeruje, że wartość którą wyestymowaliśmy może jeszcze znacznie odbiegać od rzeczywistej.</p>
+
+<h2>Zadanie 4</h2>
+<p>Zajmiemy się teraz 95% przedziałem predykcji dla nowej zmiennej $\small Y_{11}$, przy założeniu, że mamy do dyspozycji jedenaście kserokopiarek. Jest to przedział, w którym z prawdopodobieństwem $\small 0.95$ znajdować się będzie nasza nowa wartość $\small Y_{11}$.</p>
+<p>Oczywiście estymator $\small Y_{11}$ jest równy rozważanemu w poprzednim zadaniu estymatorowi średniej $\small \mu_{11}$. Jedyna różnica jaka nastąpi to w $\small s(\hat{Y_{11}})$, mianowicie:</p>
+$$
+s^2(\hat{Y_{11}}) = \hat{\sigma}^2\left(1 + \frac{1}{n} + \frac{(X_{11} - \overline{X})^2}{\sum_{i = 1}^n{(X_i-\overline{X})^2}} \right).
+$$
+```{r ex4data, echo = TRUE, warning = FALSE, tidy = TRUE}
+s2_Y <- function(v, x, s) {
+  return(s^2*(1 + 1/length(x) + (v-mean(x))^2/(sum((x-mean(x))^2))))
+}
+s_Y_11 <- sqrt(s2_Y(11, data$quantity, sigma))
+```
+<p>Z tych wszystkich wartości uzyskujemy nasz przedział predykcyjny postaci:</p>
+$$
+\left[ \hat{Y_{11}} - t_c s(\hat{Y_{11}}), \hat{Y_{11}} + t_c s(\hat{Y_{11}}) \right] \\
+[`r round(mu_11 - tc*s_Y_11, 3)`, `r round(mu_11 + tc*s_Y_11, 3)`].
+$$
+<p>Jak widać, przedział jaki uzyskaliśmy jest bardzo szeroki. Było oczywistym, że będzie on szerszy od tego w poprzednim zadaniu, gdyż wcześniej znaczny wpływ miały pozostałe dane, mianowicie, przewidywaliśmy ich średnią. W tym przypadku przewidujemy wartość poszczególnego wyrazu, co zwiększa nasze możliwości dobrania wyrazu $\small Y_{11}$.</p>
+
+<h2>Wbudowane komendy</h2>
+<p>W poniższym zadaniu zweryfikujemy wszystkie powyższe rozważania z zadań 2, 3 i 4 za pomocą wbudowanych komend w <em>R</em>. Wyniki zaprezentujemy w poniższej tabelce:</p>
+```{r summary_for_ex, echo = TRUE, warning = FALSE, tidy = TRUE}
+model <- lm(time~quantity, data)
+predict_mu_11 <-predict(model, data.frame(quantity = c(11)), interval = "confidence")
+predict_Y_11 <-predict(model, data.frame(quantity = c(11)), interval = "prediction")
+column1 <- c(model$coefficients, confint(model)[2,1], confint(model)[2,2], predict_mu_11, predict_Y_11)
+column2 <- c(beta0, beta1, beta1-tc*s_beta1, beta1+tc*s_beta1, mu_11, mu_11-tc*s_mu_11, mu_11+tc*s_mu_11, mu_11, mu_11-tc*s_Y_11, mu_11+tc*s_Y_11)
+table <- data.frame(column1, column2)
+rows <- c("$\\beta_0$", "$\\beta_1$", "$\\beta_1 Lconf$", "$\\beta_1 Rconf$", "$\\mu_{11}$", "$\\mu_{11} Lconf$", "$\\mu_{11} Rconf$", "$Y_{11}$", "$Y_{11} Lpred$", "$Y_{11} Rpred$")
+row.names(table) <- rows
+knitr::kable(table, row.names = TRUE, escape = FALSE, format = "pipe", align = "c", col.names = c("Komendy","Ręcznie"))
+```
+<p>Jak widać dane jakie uzyskaliśmy w poprzednich zadaniach są takie same jak te z wykorzystaniem komend w <em>R</em>, stąd wniosek, że wszystkie obliczenia wykonaliśmy prawidłowo.</p>
+
+<h2>Zadanie 5</h2>
+<p>W poniższym zadaniu wyznaczymy 95% pasmo ufności dla naszych danych i zaznaczymy je na wykresie.</p>
+```{r pred_bounds, echo = TRUE, warning = FALSE, fig.height = 7, fig.width = 10}
+prediction <- predict(model, se.fit=TRUE)
+se_fit <-prediction$se.fit
+fit <- prediction$fit
+w <- sqrt(2 * qf(1-0.05, 2, dim(data)[1]-2))
+upper_line <- sort(fit + w*se_fit)
+lower_line <- sort(fit - w*se_fit)
+
+s_pred <- sapply(1:15, function(x)sqrt(s2_Y(x, data$quantity, sigma)))
+s_fit <- sapply(1:15, function(x)sqrt(s2_mu(x, data$quantity, sigma)))
+fits <- predict(model, data.frame(quantity = 1:15))
+tc <- qt(1-0.05/2, df = length(data$quantity) - 2)
+
+plot(data$quantity, data$time, main = NULL, ylab = "czas(h)", xlab = "ilość(szt)", col = "#16ab43", pch = 19)
+points(sort(data$quantity), sort(fit),type='l', col = "#2e3f91", lwd = 2);
+points(sort(data$quantity), upper_line,type='l',col='#42b8e7', lwd = 2)
+points(sort(data$quantity), lower_line,type='l',col='#42b8e7', lwd = 2)
+points(1:15, s_pred*tc + fits, col = "red", type = "l", lwd = 2)
+points(1:15, -s_pred*tc + fits, col = "red", type = "l", lwd = 2)
+points(1:15, s_fit*tc + fits, col = "orange", type = "l", lwd = 2)
+points(1:15, -s_fit*tc + fits, col = "orange", type = "l", lwd = 2)
+```
+<p>Jak widać, prosta przybliżająca nasze wartości(granatowa) znajduje się pomiędzy pasmem ufności(cyjanowy), choć wiele obserwacji jest poza nim. Na wykresie znajdują się również przedziały predyjcyjne(czerowne), oraz przedziały ufności(pomarańczowe). Warto zwrócić uwagę, że żadne z nich się nie przecinają, oraz na to, że interesująco się zawierają.</p>
+
+<h2>Zadanie 6</h2>
+<p>W poniższym zadaniu korzystając z danych: $\small n = 40$, $\small \sigma^2 = 120$ i $\small SSX = 1000$ wyznaczymy wartość odrzucającą hipotezę zerową mówiącą, że współczynnik $\small \beta_1$ wynosi zero, wykorzystując poziom istotności $\small \alpha = 0.05$, kiedy prawdziwa wartość wynosi $\small \beta_1 = 1$.</p>
+```{r ex6_1, echo = TRUE, warning = FALSE, tidy = TRUE}
+test_power_fun <- function(n = 40, SSX = 1000, s2 = 120, beta_1 = 1) {
+  s_beta1 <- sqrt(s2 / SSX)
+  T <- beta_1 / s_beta1
+  tc <- qt(1 - 0.05/2, df = n - 2)
+  return(pt(-tc, df = n - 2, ncp = T) + 1 - pt(tc, df = n - 2, ncp = T))
+}
+power_for_beta_1 <- test_power_fun()
+
+```
+<p>Z powyższych obliczeń uzyskujemy, że z około 80% pewnością możemy odrzucić hipotezę, że $\small \beta_1 = 0$. Jest to wynik jakiego moglibyśmy się spodziewać, ponieważ prawdziwa wartość $\small \beta_1 = 1$ jest całkiem odległa od zera. Dokładna wartości wynosi `r power_for_beta_1`.</p>
+<p>Wyznaczymy teraz wartości funkcji mocy testu dla wartości $\small \beta_1$ z przedziału $\small (-2, \ 2)$ i narysujemy je na wykresie.</p>
+```{r power_plot, echo = TRUE, warning = FALSE, tidy = TRUE}
+power_fun_values <- sapply(seq(-2, 2, by = 0.01), function(x) test_power_fun(beta_1 = x))
+plot(seq(-2, 2, by = 0.01), power_fun_values, type = "l", main = NULL, xlab = "prawdziwe wartości beta_1", ylab = "Moc testu", lwd = 2, col = "#6e08a5")
+```
+<p>Jak można się spodziwać, im bliżej zera tym ciężej obalić hipotezę, że $\small \beta_1 = 0$. Natomiast oddalając się od argumentu $\small 0$, wartości symetrycznie oddalają się od zera, gdzie w okoliach 1.5 oraz -1.5 argumenty osiągają już wartości bliskie 1, co jest jednoznaczne z dużą mocą obalenia hipotezy zerowej na rzecz hipotezy altenatywnej, że $\small \beta_1 \neq 0$.</p>
+
+<h2>Zadanie 7</h2>
+<p>W poniższym zadaniu wygenerujemy wektor $\small X$ z wielowymiarowego rozkładu normalnego $\small N(0, \frac{1}{200}I)$. Następnie wygenerujemy 1000 wektorów $\small Y$ z modelu $\small Y = 5 + \beta_1 X + \epsilon$, gdzie:</p>
+<ul>
+<li>$\small \beta_1 = 0, \ \epsilon \sim N(0,I)$,</li>
+<li>$\small \beta_1 = 0, \ \epsilon_1, \ldots, \epsilon_{200}$ są iid z rozkładu wykładniczego o parametrze $\small \lambda = 1$,</li>
+<li>$\small \beta_1 = 1.5, \ \epsilon \sim N(0,I)$,</li>
+<li>$\small \beta_1 = 1.5, \ \epsilon_1, \ldots, \epsilon_{200}$ są iid z rozkładu wykładniczego o parametrze $\small \lambda = 1$.</li>
+</ul>
+<p>Dla każdego z powyższych przypadków przetestujemy hipotezę $\small H_0: \beta_1 = 0$ i wyestymujemy prawdopodobieństwo jej odrzucenia, licząc frakcję odrzuceń w poszczególnej próbie. Przy czym dla pierwszych dwóch podpunktów jest to prawdopodobieństwo <em>błędu pierwszego rodzaju</em>, natomiast dla pozostałych to <em>moc testu</em>.</p>
+
+```{r ex7test, echo = TRUE, warning = FALSE, tidy = TRUE}
+
+tc <- qt(1-0.05/2, df = 200 - 2)
+
+freq_test <- function(epsilon_dist, parameters = list(), beta1, n) {
+  test_freq <- 0
+  for (i in 1:n) {
+    X <- rnorm(200, mean = 0, sd = sqrt(1/200))
+    epsilon <- do.call(epsilon_dist, parameters)
+    Y <- 5 + beta1*X + epsilon
+    sigma <- sqrt(sigma2_estimator(X,Y))
+    s_beta1 <- sqrt(s2_beta1_function(X, sigma))
+    beta1_est <- B1_estimator(X,Y)
+
+    if(abs(beta1_est/s_beta1) > tc) test_freq <- test_freq + 1
+  }
+  return(test_freq/n)
+}
+
+freq_1 <- freq_test(rnorm, list(200), 0, 1000)
+freq_2 <- freq_test(rexp, list(200), 0, 1000)
+freq_3 <- freq_test(rnorm, list(200), 1.5, 1000)
+freq_4 <- freq_test(rexp, list(200), 1.5, 1000)
+```
+<p>Dla pierwszych dwóch przypadków prawdopodobieństwo błędu pierwszego rodzaju jest zbliżone i wynosi: `r freq_1` dla pierwszego przypadku, oraz `r freq_2` dla drugiego. Intuicyjnie jest to wynik jakiego oczekiwaliśmy, gdyż testy były przeprowadzone na poziomie istotności $\small \alpha = 0.05$. Dla pozostałych przypadków też uzyskaliśmy zbliżone wyniki, mianowicie: `r freq_3` dla trzeciego przypadku, oraz `r freq_4` dla ostatniego.</p>
+<p>Porównamy teraz uzyskane wyniki z teoretycznymi obliczeniami. W pierwszych dwóch przypadkach jest to <em>błąd pierwszego rodzaju</em>, czyli:</p>
+$$
+P(odrzucenie \ H_0 \ | \ \beta_1 = 0) = \alpha
+$$
+<p>W ostatnich dwóch przypadkach mamy do czynienia z <em>mocą testu</em>, czyli prawdopodobieństwo odrzucenia hipotezy $\small H_0$, gdy rzeczywiście ona nie zachodzi. Moglibyśmy się w takim razie spodziewać lepszych wyników, zważając że za $\small \beta_1$ przyjeliśmy 1.5. Jednak poprzez dobór $\small X$ z rozkładu $\small N(0, \frac{1}{200}I)$, sprawiliśmy, że błędy zdominowały relację i sprawiły, że wyestymowany parametr $\small \hat{\beta_1}$ jest bliski zera, przez co ciężej jest odrzucić $\small H_0$.</p>
+<p>Warto zwrócić uwagę, że zmianna błędu ze standardowego normalnego, który znajduje się w przyjmowanej przez nas definicji regresji liniowej, na błąd z rozkładu wykładniczego z parametrem $\small \lambda = 1$ nie zmienia znacząco wyników. Warto też zwrócić uwagę, że utworzone przez nas modele we wszystkich powyższych przypadkach nie są właściwie liniowe. Widać to od razu analizując wykresy owych relacji.</p>

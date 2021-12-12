@@ -1,0 +1,259 @@
+---
+title: "Raport 3"
+author: "Piotr Wójcik"
+date: "27 11 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+```
+<p>W poniższych dwóch zadaniach będziemy analizować zbiór danych zawierający informacje o pewnych uczniach z siódmej klasy. Zawiera on informacje o średniej uczniów(GPA), punktach uzyskanych z testu IQ, płci oraz wyniku z testu psychologicznego <em>Piers-Harris Childrens Self-Concept Scale</em>.</p>
+```{r loadData1, echo = TRUE, warning = FALSE, tidy = TRUE}
+students <- read.table("tabela1_6.txt", sep = '\t', header = FALSE, col.names = c("id", "GPA", "IQ", "Gender", "PH"))
+```
+<h2>Zadanie 3</h2>
+<p>Wykorzystamy regresję liniową do zbadania czy średnia GPA zależy w sposób liniowy od punktów IQ dla naszego zbioru danych. Poniżej zaprezentujemy wykres ich zależności z narysowaną prostą regresji.</p>
+```{r ex3regplot, echo = TRUE, warning = FALSE, tidy = TRUE}
+GPAtoIQ <- lm(GPA~IQ, students)
+
+plot(students$IQ, students$GPA, xlab = "IQ", ylab = "GPA")
+lines(seq(60, 180, by = 20), GPAtoIQ$coefficients[1] + GPAtoIQ$coefficients[2]*seq(60, 180, by = 20), type = "l")
+```
+<p>Wyznaczona prosta opisana jest równaniem:</p>
+$$
+y(x) = `r GPAtoIQ$coefficients[2]`x  `r GPAtoIQ$coefficients[1]` .
+$$
+<p>Wykres sugeruje, że nie mamy liniowej zależności pomiędzy tymi zmiennymi, choć widać pewną korelację między nimi. Przeanalizujemy to dokładniej testując istotność współczynnika nachylenia $\small \beta_1$, oraz wyznaczając współczynnik determinacji $\small R^2$ opisujący jaki procent zmiennych zostało wyjaśnionych przez nasz model.</p>
+<p>Zaczniemy od współczynnika $\small R^2$ który możemy wyznaczyć ze wzoru:</p>
+$$
+R^2 = \frac{SSM}{SST} = \frac{\sum_{i = 1}^n{(\hat{Y_i} - \overline{Y})^2}}{\sum_{i = 1}^n{(Y_i - \overline{Y})^2}} .
+$$
+```{r Rsquared, echo = TRUE, warning = FALSE, tidy = TRUE}
+R2_fun <- function(Y, X, b0, b1) {
+  return(sum(((X*b1 + b0) - mean(Y))^2)/sum((Y - mean(Y))^2))
+}
+
+R2_IQ <- R2_fun(students$GPA, students$IQ, GPAtoIQ$coefficients[1], GPAtoIQ$coefficients[2])
+```
+<p>Dla naszych danych współczynnik $\small R^2$ wynosi `r R2_IQ`, czyli około 40% danych zostało opisanych przez nasz model. Korelacja próbkowa $\small corr(X,Y)$ wynosi $\small `r sqrt(R2_IQ)`$, stąd wniosek, że pomimo pewnej zależności jaka zachodzi pomiędzy tymi zmiennymi nie powinniśmy w sposób liniowy wiązać GPA oraz punktów IQ. Przeprowadzimy teraz test istotności współczynnika $\small \beta_1$.</p>
+```{r beta_1Test, echo = TRUE, warnign = FALSE, tidy = TRUE}
+F_statistics_fun <- function(Y, X, b0, b1) {
+  return(sum(((X*b1 + b0) - mean(Y))^2)/(sum((Y - (X*b1 + b0))^2)/(length(X) - 2)))
+}
+
+F_IQ <- F_statistics_fun(students$GPA, students$IQ, GPAtoIQ$coefficients[1], GPAtoIQ$coefficients[2])
+p_value_IQ <- pf(F_IQ, 1, length(students$IQ) - 2, lower.tail = FALSE)
+```
+<p>Statystyka testowa $\small F = MSM/MSE$ wynosi $\small `r F_IQ`$, a p-wartość dla niej $\small `r p_value_IQ`$. Można wysnuć stąd wniosek, że dane w jakiś sposób mogą zależeć od siebie, choć nie do końca musi być to relacja liniowa.</p>
+<p>Załóżmy, że do klasy z której posiadamy wyniki dołączył nowy uczeń którego iloraz inteligencji wynosi 100 punktów. Na podstawie naszego modelu wyznaczymy hipotetyczną średnią GPA tego ucznia, a następnie 90% przedział predykcyjny dla tej obserwacji.</p>
+```{r X_100_pred_int, echo = TRUE, warning = FALSE, tidy = TRUE}
+prediction <- predict(GPAtoIQ, data.frame(IQ = 100), interval = "prediction", level = 0.9)
+```
+<p>Hipotetyczne GPA wynosi `r prediction[1]`, natomiast 90% przedział predykcyjny dla tej obserwacji jest postaci:</p>
+$$
+[`r prediction[2]` \ , \ `r prediction[3]` ] .
+$$
+<p>Mając na uwadzę fakt, że nasz model nie przybliża dobrze relacji nie powinniśmy znacznie polegać na uzyskanych wynikach.</p>
+<p>Wyznaczymy teraz 95% przedziały predykcyjne dla wszystkich obserwacji oraz zaznaczymy ich końce na wykresie naszej relacji łącząc je, aby uzyskać pasmo predykcyjne.</p>
+```{r predBand, echo = TRUE, warning = FALSE, tidy = TRUE, fig.width = 9, fig.height = 7}
+predictions <- predict(GPAtoIQ, data.frame(IQ = seq(50, 150, by = 1)), interval = "prediction", level = 0.95)
+
+plot(students$IQ, students$GPA, xlim = c(70, 140), ylim = c(0,12), xlab = "GPA", ylab = "IQ")
+lines(seq(60, 180, by = 20), GPAtoIQ$coefficients[1] + GPAtoIQ$coefficients[2]*seq(60, 180, by = 20), type = "l", lwd = 2)
+lines(seq(50, 150, by = 1), predictions[,2], type = "l", lwd = 2)
+lines(seq(50, 150, by = 1), predictions[,3], type = "l", lwd = 2)
+```
+<p>Jak łatwo zauważyć 4 obserwacje znajdują się poza naszym pasmem, czyli $\small 4/78 = `r 4/78`$, stąd wniosek, że pomimo słabo dobranego modelu, nasze przedziały dobrze estymują zawieranie się danych.</p>
+
+<h2>Zadanie 4</h2>
+<p>W poniższym zadaniu będziemy analizować zależność wyniku testu psychologicznego Piers-Harris Childrens Self-Concept Scale na GPA uczniów. Jak w poprzednim zadaniu, zaczniemy od wyznaczenia wykresu tej relacji z prostą regresji na wykresie oraz obliczenia współczynnika determinacji $\small R^2$, aby przeanalizować czy mamy do czynienia z relacją liniową.</p>
+```{r ex4plot, echo = TRUE, warning = FALSE, tidy = TRUE}
+GPAtoPH <- lm(GPA~PH, students)
+
+plot(students$PH, students$GPA, xlab = "PH", ylab = "GPA")
+lines(seq(10, 90, by = 40), GPAtoPH$coefficients[1] + GPAtoPH$coefficients[2]*seq(10, 90, by = 40), type = "l")
+```
+<p>Wyznaczona prosta opisana jest równaniem:</p>
+$$
+y(x) = `r GPAtoPH$coefficients[2]`x + `r GPAtoPH$coefficients[1]` .
+$$
+<p>Wykres sugeruje, że może zachodzić pewna relacja pomiędzy tymi zmiennymi, aczkolwiek nie jest w pełni jasne, czy jest to relacja liniowa. Żeby lepiej przeanalizować naszą relację, wyznaczymy współczynnik determinacji $\small R^2$.</p>
+```{r R2ex4, echo = TRUE, warning = FALSE, tidy = TRUE}
+R2_PH <- R2_fun(students$GPA, students$PH, GPAtoPH$coefficients[1], GPAtoPH$coefficients[2])
+```
+<p>Współczynik determinacji $\small R^2$ który wyznacza procent obserwacji opisanych przez nasz model wynosi $\small `r R2_PH`$, czyli około 30%. Jest to jeszcze mniej niż w poprzednim przypadku, kiedy było to około 40%. Korelacja próbkowa $\small corr(X,Y)$ wynosi $\small `r sqrt(R2_PH)`$. Stąd wniosek, że ponownie nasz model nie jest szczególnie użyteczny przy tej relacji, jest wręcz gorszy od tego w poprzednim zadaniu.</p>
+<p>Przetestujemy teraz istotność współczynnika kierunkowego $\small \beta_1$ aby sprawdzić, czy rzeczywiście zachodzi jakaś zależność pomiędzy GPA a wynikiem z testu psychologicznego.</p>
+```{r beta_1Test_ex4, echo = TRUE, warnign = FALSE, tidy = TRUE}
+F_PH <- F_statistics_fun(students$GPA, students$PH, GPAtoPH$coefficients[1], GPAtoPH$coefficients[2])
+p_value_PH <- pf(F_PH, 1, length(students$PH) - 2, lower.tail = FALSE)
+```
+<p>Statystyka testowa $\small F$ wynosi $\small `r F_PH`$, a p-wartość dla niej $\small `r p_value_PH`$. Można wysnuć stąd wniosek, że dane w jakiś sposób mogą zależeć od siebie, choć nie do końca musi być to relacja liniowa.</p>
+<p>Wyznaczymy teraz 90% przedział predykcyjny dla studenta który uzyskał 60 punktów z testu psychologicznego oraz jego hipotetyczne GPA.</p>
+```{r X_100_pred_int_ex4, echo = TRUE, warning = FALSE, tidy = TRUE}
+prediction <- predict(GPAtoPH, data.frame(PH = 60), interval = "prediction", level = 0.9)
+```
+<p>Hipotetyczne GPA wynosi `r prediction[1]`, natomiast 90% przedział predykcyjny dla tej obserwacji jest postaci:</p>
+$$
+[`r prediction[2]` \ , \ `r prediction[3]` ] .
+$$
+<p>Analogicznie jak w poprzednim zadaniu, nie powinniśmy szczególnie opierać się na uzyskanych wynikach skoro nasz model tak słabo opisuje naszą relację, choć uzyskane wyniki mogą być pomocne przy głębszej analizie naszej relacji.</p>
+<p>Wyznaczymy teraz 95% przedziały predykcyjne dla wszystkich obserwacji oraz zaznaczymy ich końce na wykresie naszej relacji łącząc je, aby uzyskać pasmo predykcyjne.</p>
+```{r predBand_ex4, echo = TRUE, warning = FALSE, tidy = TRUE, fig.width = 9, fig.height = 7}
+predictions <- predict(GPAtoPH, data.frame(PH = seq(10, 90, by = 1)), interval = "prediction", level = 0.95)
+
+plot(students$PH, students$GPA, xlab = "PH", ylab = "GPA", ylim = c(0,12))
+lines(seq(10, 90, by = 40), GPAtoPH$coefficients[1] + GPAtoPH$coefficients[2]*seq(10, 90, by = 40), type = "l", lwd = 2)
+lines(seq(10, 90, by = 1), predictions[,2], type = "l", lwd = 2)
+lines(seq(10, 90, by = 1), predictions[,3], type = "l", lwd = 2)
+```
+<p>Jak łatwo zauważyć 3 obserwacje znajdują się poza naszym pasmem, czyli $\small 3/78 = `r 3/78`$, stąd wniosek, że pomimo słabo dobranego modelu, nasze przedziały całkiem dobrze estymują zawieranie się danych, choć przy relacji w poprzednim zadaniu uzyskaliśmy lepszy wynik.</p>
+<p>Ostatecznie można podsumować, że oba modele słabo nadają się do predykcji GPA w sposób liniowy, choć zdecydowanie lepiej radził sobie pierwszy model, głównie z powodu współczynnika determiancji $\small R^2$. Mówiąc inaczej, w modelu liniowym iloraz inteligencji lepiej opisuje średnią GPA niż wyniki z testu psychologicznego.</p>
+
+<p>Porównamy teraz pewne dane obliczone ręcznie z wartościami obliczonymi za pomocą wbudowanych komend w <em>R</em>. Dane zaprezentujemy w poniższej tabeli:</p>
+```{r summary_for_ex, echo = TRUE, warning = FALSE, tidy = TRUE}
+IQsummary <- summary(GPAtoIQ)
+PHsummary <- summary(GPAtoPH)
+
+column1 <- c(R2_IQ, F_IQ, p_value_IQ, R2_PH, F_PH, p_value_PH)
+column2 <- c(IQsummary$r.squared, IQsummary$fstatistic["value"], IQsummary$coefficients[2,4], PHsummary$r.squared, PHsummary$fstatistic["value"], PHsummary$coefficients[2,4])
+table <- data.frame(column1, column2)
+rows <- c("$IQ\\_R^2$", "$IQ\\_F$", "$IQ\\_p-value$", "$PH\\_R^2$", "$PH\\_F$", "$PH\\_p-value$")
+row.names(table) <- rows
+knitr::kable(table, row.names = TRUE, escape = FALSE, format = "pipe", align = "c", col.names = c("Ręcznie","Komendy"))
+```
+<p>Ponieważ wartości w obu kolumnach są takie same, stąd wniosek, że dobrze obliczyliśmy wszystkie wartości.</p>
+
+<p>Przez najbliższe dwa zadania będziemy zajmować się zbiorem danych z kserokopiarkami z poprzedniego raportu.</p>
+```{r including_data, echo = TRUE, warning = FALSE, tidy = TRUE}
+data <- read.table("CH01PR20.txt", col.names = c("time","quantity"))
+```
+<h2>Zadanie 5</h2>
+<p>W poniższym zadaniu będziemy analizować residua w modelu liniowym, gdzie zmienną objaśniającą jest ilość kserokopiarek, natomiast zmienna objaśniana to czas potrzebny na ich konserwację. Przypomnijmy wykres tej relacji z załączoną prostą regresji:</p>
+```{r plot_data1, echo = TRUE, warning = FALSE, tidy = TRUE}
+model <- lm(time~quantity, data)
+
+plot(data$quantity, data$time, main = NULL, ylab = "czas(h)", xlab = "ilość(szt)", pch = 19)
+lines(seq(0, 13, by = 2), model$coefficients[1] + model$coefficients[2]*seq(0, 13, by = 2), type = "l", lwd = 2)
+```
+<p>Ponieważ z założenia błąd występujący w założeniach regresji liniowej jest symetryczny, stąd suma residuów powinna być bliska zera, gdzie $\small i-te$ residuum można wyznaczyć ze wzoru:</p>
+$$
+Y_i - \hat{Y_i} = Y_i - (\hat{\beta_0} + \hat{\beta_1}X_i).
+$$
+<p>Zweryfikujemy to dla naszego modelu.</p>
+```{r res_sum, echo = TRUE, warning = FALSE, tidy = TRUE}
+res_sum <- sum(model$residuals)
+```
+<p>Suma residuów dla naszego modelu wynosi $\small `r res_sum`$, która jest rzeczywiście bliska zera. Stąd wniosek, że prawdopodobnie nasze błędy mają symetryczną strukturę.</p>
+<p>Wyznaczymy teraz na wykresie relację residuów ze zmienną objaśniającą, w celu przeanalizowania czy zachodzi pewna zależność między nimi.</p>
+```{r res_explanatory_plot, echo = TRUE, warninig = FALSE, tidy = TRUE}
+colors <- sapply(1:45, function(x) "black")
+colors[c(9, 35, 34, 43, 2, 44, 24, 28, 8, 32, 26, 29, 39, 38, 41)] <- "red"
+
+plot(data$time, model$residuals, ylim = c(-20, 20), xlab = "czas(h)", ylab = "residua", col = colors)
+abline(h = 0)
+```
+<p>Można zauważyć, że w ogólności mniej więcej tyle samo jest residuów ujemnych co dodatnich i są ona rozmieszczone względnie losowo. Zachodzi jednak pewna zależność przy niektórych obserwacjach które zaznaczyliśmy na czerwono.</p>
+<p>Wyznaczymy teraz wykres residuów w kolejności ich występowania, w celu przeanalizowania czy zachodzi jakaś zależność w samych błędami.</p>
+```{r res_plot, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(model$residuals, ylab = "residua", ylim = c(-20, 20))
+abline(h = 0)
+```
+<p>Od razu widać, że dane są rozrzucone losowa wokół zera, co sugeruje że są one z rozkładu normalnego o średniej zero, co jest założeniem regresji liniowej. Nie widać też większych odstępstwo, stąd wniosek że nie ma wartości odstających w naszym zbiorze danych.</p>
+<p>Aby się upewnić, że nasze błedy są rozkładu normalnego wyznaczymy teraz histogram residuów z dopasowaną krzywą gęstości rozkładu normalnego.</p>
+```{r res_hist, echo = TRUE, warning = FALSE, tidy = TRUE, fig.height = 6}
+hist(model$residuals, freq = FALSE, xlim = c(-20, 20), main = NULL, breaks = seq(-30, 30, by = 4), xlab = "residua", ylab = "gęstość")
+curve(dnorm(x, sd = sd(model$residuals)), lwd = 2, add = TRUE)
+```
+<p>Widać, że rozkład residuów zbliża się do rozkładu normalnego o średniej zero, aby lepiej to zobaczyć wyznaczymy teraz wykres kwantylowo kwantylowy.</p>
+```{r res_qqplot, echo = TRUE, warning = FALSE, tidy = TRUE, fig.width = 8}
+qqnorm(model$residuals, main = NULL, ylim = c(-20, 20), ylab = "kwantyle residuów", xlab = "kwantyle teoretyczne")
+qqline(model$residuals)
+```
+<p>Wykres wyraźnie pokazuje, że rozkład residuów jest bardzo bliski rozkładowi normalnemu.</p>
+<p>Wykonamy jeszcze jeden test, mianowicie <em>test Shapiro-Wilka</em>, który także służy do badania normalności danych.</p>
+```{r Shapiro-Wilk, echo = TRUE, warning = FALSE, tidy = TRUE}
+SW_test <- shapiro.test(model$residuals)
+```
+<p>Ponieważ p-wartość powyższego testu jest równa $\small `r SW_test$p.value` > 0.05$, stąd wniosek, że rozkład residuów jest normalny.</p>
+<p>Ostatecznie, ponieważ wszystkie trzy metody testowania wykazały, że residua są z rozkładu normalnego, stąd wniosek, że nie powinniśmy tego podważać.</p>
+
+<h2>Zadanie 6</h2>
+<p>W poniższym zadaniu zmodyfikujemy zbiór danych zmieniając czas potrzebny na konserwację kserokopiarki w pierwszej obserawacji z 20 na 2000, w celu przeanalizowania jak jedna obserwacja odstająca wpływa na cały model.</p>
+```{r data_alteration, echo = TRUE, warning = FALSE, tidy = TRUE}
+data$time[1] <- 2000
+
+model_ol <- lm(time~quantity, data)
+```
+<p>Analizę zaczniemy od wyrysowania relacji wraz z prostą regresji:</p>
+```{r rel_plot, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(data$quantity, data$time, main = NULL, ylab = "czas(h)", xlab = "ilość(szt)", pch = 19)
+lines(seq(0, 13, by = 2), model_ol$coefficients[1] + model_ol$coefficients[2]*seq(0, 13, by = 2), type = "l", lwd = 2)
+```
+<p>Od razu widać, że prosta nie przybliża w żaden sposób relacji. Aby się temu lepiej przyjrzeć, wypiszemy w tabelce poniżej dane modelu, wraz z danymi z modelu bez wartości odstającej.</p>
+```{r table_summary_ex6, echo = TRUE, warning = FALSE, tidy = TRUE}
+summary_model <- summary(model)
+summary_model_ol <- summary(model_ol)
+
+column1 <- c(model$coefficients[1], model$coefficients[2], summary_model$coefficients[2,3], summary_model$coefficients[2,4], summary_model$r.squared, summary_model$sigma^2)
+column2 <- c(model_ol$coefficients[1], model_ol$coefficients[2], summary_model_ol$coefficients[2,3], summary_model_ol$coefficients[2,4], summary_model_ol$r.squared, summary_model_ol$sigma^2)
+table <- data.frame(column1, column2)
+rows <- c("$\\beta_0$", "$\\beta_1$", "t-value", "p-value", "$R^2$", "$\\sigma^2$")
+row.names(table) <- rows
+knitr::kable(table, row.names = TRUE, escape = FALSE, format = "pipe", align = "c", col.names = c("bez wartości odstającej","z wartością odstającą"))
+```
+<p>Jak widać wszystkie wyniki uległy znacznemu pogorszeniu, na przykład współczynnik determinacji $\small R^2$ z wartości bliskiej jedynki stał się prawie zerowy, więc nasz model w ogóle nie opisuje zależności między tymi zmiennymi. Widać skrajny wzrost wariancji, przez co nie będziemy w stanie konstruować użytecznych przedziałów ufności czy testów, jak test na istotności współczynnika kierunkowego $\small \beta_1$, którego p-wartość wynosi prawie 0.85, gdzie wcześniej ta p-wartość była bardzo bliska zera.</p>
+<p>Przyjrzymy się teraz residuum wykonując te same testy co w poprzednim zadaniu.</p>
+```{r res_tests, echo = TRUE, warning = FALSE, tidy = TRUE, fig.width = 8, fig.height = 6}
+plot(data$time, model_ol$residuals, xlab = "czas(h)", ylab = "residua")
+abline(h = 0)
+
+plot(model_ol$residuals, ylab = "residua")
+abline(h = 0)
+
+hist(model_ol$residuals, freq = FALSE, main = NULL, xlab = "residua", ylab = "gęstość", breaks = seq(-500,2100, by = 50))
+curve(dnorm(x, sd = sd(model_ol$residuals)), lwd = 2, add = TRUE)
+
+qqnorm(model_ol$residuals, main = NULL, ylab = "kwantyle residuów", xlab = "kwantyle teoretyczne")
+qqline(model_ol$residuals)
+```
+<p>Na każdym z wykresów wyraźnie widać obserwację odstającą. Warto zatrzymać się na histogramie, gdzie krzywa normalna jest zupełnie nie zbliżona do rozkładu residuów, jest to spowodowane bardzo dużą wariancją modelu. Możemy łatwo zauważyć, że usuwając tę obserwację uzyskamy model dobrze przybliżający naszą relację.</p>
+<p>Na koniec wykonamy test Shapiro-Wilka, który wykonaliśmy też w poprzednim zadaniu, gdzie wykazaliśmy że rozkład residuów jest normalny. Po analizie poprzednich wykresów bez trudu dostrzegamy, że rozkład w tym przypadku nie powinien być normalny. Zobaczymy czy ten test to wykryje.</p>
+```{r Shapiro-Wilk_ex6, echo = TRUE, warning = FALSE, tidy = TRUE}
+SW_test <- shapiro.test(model_ol$residuals)
+```
+<p>P-wartość jaką uzyskaliśmy wynosi $\small `r SW_test$p.value` < 0.05$, stąd jak mogliśmy się spodziewać, odrzucamy hipotezę, że rozkład residuów jest normalny.</p>
+
+<p>Przez następne zadania będziemy korzystać ze zbioru danych opisującego stężenie molowe roztworu, gdzie pierwsza kolumna opisuje stężenie, natomiast druga kolumna opisuje czas.</p>
+```{r data_solution, echo = TRUE, warning = FALSE, tidy = TRUE}
+solution <- read.table("CH03PR15.txt", header = FALSE, col.names = c("concentration", "time"))
+```
+
+<h2>Zadanie 7 i 8</h2>
+<p>W poniższym zadaniu dopasujemy prostą regresji do relacji, gdzie zmienną objaśniającą jest czas, natomiast zmienną objaśnianą stężenie roztworu. Następnie przedstawimy wykres tej relacji wraz z dopasowaną prostą regresji, oraz 95% pasmem predykcyjnym utworzonym jak w zadaniu 3, w celu wstępnego przeanalizowania czy nasz model ma sens.</p>
+```{r ex7model, echo = TRUE, warning = FALSE, tidy = TRUE}
+model <- lm(concentration~time, solution)
+predictions <- predict(model, data.frame(time = seq(-2,12,by=0.5)), interval = "prediction", level = 0.95)
+
+plot(solution$time, solution$concentration, xlab = "czas", ylab = "stężenie", xlim = c(0,10))
+lines(seq(-2,13,by=5), model$coefficients[1] + model$coefficients[2]*seq(-2,13,by=5), tyle = "l", lwd = 2)
+lines(seq(-2, 12, by = 0.5), predictions[,2], type = "l", lwd = 2)
+lines(seq(-2, 12, by = 0.5), predictions[,3], type = "l", lwd = 2)
+```
+<p>Wyraźnie widać, że model słabo sobie poradził z dopasowaniem prostej regresji. Można więc wstępnie uznać nasz model za mało użyteczny. Pomimo tego, przeanalizujmy podstawowe własności naszego modelu. Wyniki przedstawimy w tabelce poniżej:</p>
+```{r ex7_table, echo = TRUE, warning = FALSE, tidy = TRUE}
+summary_model <- summary(model)
+
+table <- data.frame("$\\beta_0$" = model$coefficients[1], "$\\beta_1$" = model$coefficients[2], "$R^2$" = summary_model$r.squared, "t-value" = summary_model$coefficients[2,3], "p-value" = summary_model$coefficients[2,4], "cor" = -sqrt(summary_model$r.squared))
+row.names(table) <- "values"
+knitr::kable(table, row.names = TRUE, escape = FALSE, format = "pipe", align = "c", col.names = c("$\\beta_0$", "$\\beta_1$", "$R^2$", "t-value", "p-value", "correlation"))
+```
+<p>Jak widać, wartości przedstawione w tabelce nie dają wystarczającej informacji o modelu, ponieważ pomimo wyraźnego problemu jaki zaobserwowaliśmy na wykresie, wartości jakie uzyskaliśmy są bardzo dobre. Widać to głównie po współczynniku determinacji $\small R^2$, który mówi, że dobrany model ma opisywać aż 81% naszej relacji. Ze współczynnika determiacji otrzymujemy korelację próbkową wynoszącą aż -0.9, która sugeruje silną relację liniową. Warto też zwrócić uwagę na p-wartość testu istotności współczynnika kierunkowego $\small \beta_1$ która jest również bardzo zadawalająca. Podsumowując, nigdy nie powinniśmy ufać samym wartościom liczbowym uzyskanym z modelu.</p>
+
+<h2>Zadanie 9</h2>
+<p>Przyglądając się wykresowi relacji możemy zaobserwować, że pomimo iż nasza relacja nie jest liniowa, to posiada pewną strukturę. Warto więc skorzystać z procedury <em>Box-Cox</em> w celu znalezienia transformacji która po nałożeniu na nasz model będzie już przybliżać prawidłowo naszą relację.</p>
+```{r box_cox_ex9, echo = TRUE, warning = FALSE, tidy = TRUE}
+box_cox_value <- boxcox(solution$concentration~solution$time)$x[which.max(boxcox(solution$concentration~solution$time)$y)]
+```
+<p>Wykres funkcji wiarygodności ma maksimum w $\small `r box_cox_value`$. Ponieważ jest to wartość bliska zera, powinniśmy użyć przekształcenia logarytmicznego na zmiennej objaśnianej $\small Y$.</p>

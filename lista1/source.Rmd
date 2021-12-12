@@ -1,0 +1,123 @@
+---
+title: "Lista 1"
+author: "Piotr Wojcik"
+date: "10/12/2021"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+<h2>Zadanie 1</h2>
+<p>W poniższym zadaniu wygenerujemy $\small 100$ wektorów losowych z rozkładu <em>dwuwymiarowego normalnego</em> $\small N(0,I)$. Następnie zaznaczymy je na płaszczyźynie.</p>
+
+```{r code1, echo = TRUE, warning = FALSE, tidy = TRUE}
+cloud1 <- sapply(1:100, function(x) matrix(rnorm(2)))
+plot(cloud1[1,], cloud1[2,], asp = TRUE, xlab = "x", ylab = "y")
+abline(h = 0, v = 0, col = "red")
+```
+<p>Zauważmy, że wszystkie punkty, są skupione w punkcie $\small (0,0)$, czego można się spodziewać, ponieważ średnia naszego rozkładu wynosi $\small \mu = \begin{pmatrix} 0 \\ 0 \end{pmatrix}.$ Są one chaotycznie rozproszone, bez widocznej zależności, co sugeruje, że dane są nieskorelowane.</p>
+
+<h2>Zadanie 2</h2>
+<p>W poniższym zadaniu przekształcimy chmurę punktów wygenerowaną w poprzednim zadaniu, w taki sposób aby uzyskać chmurę z rozkładu $\small N(\mu, \Sigma)$, gdzie:</p>
+<ul>
+<li>$\small \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 1 &  0.9\\ 0.9 & 1 \end{pmatrix},$</li>
+<li>$\small \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 1 &  -0.9\\ -0.9 & 1 \end{pmatrix},$</li>
+<li>$\small \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 9 &  0\\ 0 & 1 \end{pmatrix}.$</li>
+</ul>
+<p>Obliczenia zaczniemy od napisania algorytmu na <em>Postać Choleskiego</em>:</p>
+```{r cholAlg, echo = TRUE, warning = FALSE, tidy = TRUE}
+xy <- function(x, y, n = 2) return(x + (y-1)*n)
+
+seq_xy <- function(x,y,n=2) {
+  seq <- c()
+  for(i in 1:y) {
+    if(i != y) {
+      seq <- c(seq, xy(x, i, n))
+    }
+  }
+  return(seq)
+}
+
+choll <- function(A) {
+  n <- dim(A)[1]
+  X <- matrix(0, nrow = n, ncol = n)
+  for(i in 1:n) {
+    for(j in 1:i) {
+      if(i == j) {
+        X[i,j] <- sqrt(A[i,j] - sum(X[seq_xy(i,j,n)]^2))
+      } else {
+        X[i,j] <- (A[i,j] - sum(X[seq_xy(i,j,n)]*X[seq_xy(j,j,n)])) / (X[j,j])
+      }
+    }
+  }
+  
+  return(X)
+}
+```
+<p>Teraz wyznaczymy chmury punktów z nowych rozkładów:</p>
+```{r code2, echo = TRUE, warning = FALSE, tidy = TRUE}
+mu <- c(4,2)
+Sigma1 <- matrix(c(1, 0.9, 0.9, 1), nrow = 2, ncol = 2)
+Sigma2 <- matrix(c(1, -0.9, -0.9, 1), nrow = 2, ncol = 2)
+Sigma3 <- matrix(c(9, 0, 0, 1), nrow = 2, ncol = 2)
+Lin_transform <- function(x, mu, Sigma) {
+  A <- choll(Sigma)
+  return(A%*%x + mu)
+}
+new_norm1 <- Lin_transform(cloud1, mu, Sigma1)
+new_norm2 <- Lin_transform(cloud1, mu, Sigma2)
+new_norm3 <- Lin_transform(cloud1, mu, Sigma3)
+```
+<p>Na zakończenie zaznaczymy na płaszczyźnie powyższe 3 chmury punktów:</p>
+<h4> $\small 1) \quad \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 1 &  0.9\\ 0.9 & 1 \end{pmatrix}$:</h4>
+```{r cloud1, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(new_norm1[1,], new_norm1[2,], asp = TRUE, xlab = "x", ylab = "y")
+abline(h = 2, v = 4, col = "red")
+```
+<p>Na powyższym wykresie możemy zaobserwować, że punkty skupiają się wokół średniej oraz że układają się w prostą, która sugeruje, że zmienne z tego rozkładu są skorelowane.</p>
+<h4> $\small 2) \quad \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 1 &  -0.9\\ -0.9 & 1 \end{pmatrix}$:</h4>
+```{r cloud2, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(new_norm2[1,], new_norm2[2,], asp = TRUE, xlab = "x", ylab = "y")
+abline(h = 2, v = 4, col = "red")
+```
+<p>Na powyższym wykresie możemy zaobserwować, że punkty skupiają się wokół średniej oraz że układają się w prostą, która sugeruje, że zmienne z tego rozkładu są skorelowane.</p>
+<h4> $\small 3) \quad \mu = \begin{pmatrix} 4 \\ 2 \end{pmatrix}, \hspace{10px} \Sigma = \begin{pmatrix} 9 &  0\\ 0 & 1 \end{pmatrix}$:</h4>
+```{r cloud3, echo = TRUE, warning = FALSE, tidy = TRUE}
+plot(new_norm3[1,], new_norm3[2,], asp = TRUE, xlab = "x", ylab = "y")
+abline(h = 2, v = 4, col = "red")
+```
+<p>Na powyższym wykresie już ciężko jednoznacznie zaobserwować wokół czego skupiają się punkty, wynika to z dużej wariancji. Punkty też nie wydają się układać w żadną prostą, przez co można wnioskować, że są nieskorelowane.</p>
+
+<h2>Zadanie 3</h2>
+<p>W poniższym zadaniu wygenerujemy wielowymiarowy rozkład normalny $\small N(0,\Sigma)$, gdzie $\small \Sigma[i,i] = 1$, oraz $\small \Sigma[i,j] = 0.9$, dla $\small i \neq j$.</p>
+```{r trial3, echo = TRUE, warnign = FALSE, tidy = TRUE}
+matrixSN <- matrix(rnorm(20000), nrow = 200, ncol = 100)
+Sigma <- matrix(nrow = 100, ncol = 100)
+for(i in 1:100) {
+  for(j in 1:100) {
+    if(i == j ) Sigma[i,j] <- 1
+    else Sigma[i,j] <- 0.9
+  }
+}
+X <- matrix(nrow = 200, ncol = 100)
+A <- t(choll(Sigma))
+X <- matrixSN%*%A
+```
+<p>Zweryfikujemym nasze wyniki, wyznaczając histogramy: średniej próbkowej; kowariancji między różnymi współrzędnymi; wariancji.</p>
+```{r meanHist, echo = TRUE, warning = FALSE, tidy = TRUE}
+meanX <- sapply(1:100, function(i) mean(X[,i]))
+hist(meanX, col = "#245b92", main = "Średnia z rozkładu", xlab = "średnia", ylab = "ilość")
+```
+<p>Zauważmy, że wartości skupiają się wokół zera, co sugeruje, że uzyskaliśmy prawidłowy wynik, ponieważ prawdziwa średnia wynosi $\small 0$.</p>
+```{r varHist, echo = TRUE, warning = FALSE, tidy = TRUE}
+CovX <- cov(X)
+DCovX <- CovX[lower.tri(CovX, diag = FALSE)]
+hist(diag(CovX), col = "#b647d2", main = "Wariancja rozkładu", xlab = "wariancja", ylab = "ilość")
+```
+<p>Analogicznie jak przy średniej możemy zauważmy, że wartości skupiają się wokół prawdziwej wartości wariancji, czyli $\small 1$, co sugeruje, że uzyskaliśmy prawidłowy wynik.</p>
+
+```{r covHist, echo = TRUE, warning = FALSE, tidy = TRUE}
+hist(DCovX, col = "#b1d92a", main = "Kowariancja rozkładu", xlab = "kowariancja", ylab = "ilość")
+```
+<p>Ostatni wynik jaki weryfikujemy to kowariancja pomiędzy różnymi współrzędnymi. Ponieważ, dla każdego $\small i \neq j$, chcieliśmy mieć $\small cov(X_i,X_j) = 0.9$, więc oczekujemy, że histogram też będzie skupiony wokół tej wartości, co rzeczywiście zachodzi.</p>
+
